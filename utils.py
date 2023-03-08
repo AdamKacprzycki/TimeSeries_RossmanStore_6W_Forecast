@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+###############################################-DTYPE OPT_MEMORY USAGE OPT-###############################################
+
 def optimize_floats(df: pd.DataFrame) -> pd.DataFrame:
     
     '''
@@ -77,6 +79,7 @@ def optimize(df: pd.DataFrame, datetime_features: List[str] = []):
     optimize_floats(optimize_ints(optimize_objects(df, datetime_features)))
     print(f'Optimize_memory_func reduce memory usage by {(1-(sys.getsizeof(df)/mem_usage_bef))*100 :.2f} %.')
     
+###############################################-USER_SETTINGS_PREFERENCES-###############################################
     
 def snake_case_col(df: pd.DataFrame) -> pd.DataFrame:
     '''
@@ -85,3 +88,10 @@ def snake_case_col(df: pd.DataFrame) -> pd.DataFrame:
     '''
     df.columns = df.columns.map(lambda x: inflection.underscore(x))
     print(f'Columns name have changed sucessfully: {list(df.columns.values[:3])}...')
+    
+###############################################-CUSTOM_VISUALIZATION-###############################################
+
+def density_plot_of_a_feature(dataframe, feature):
+  plt.figure(figsize=(8, 6))
+  sns.distplot(dataframe[feature])
+  plt.show()
