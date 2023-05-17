@@ -5,7 +5,12 @@ import inflection
 
 import pandas as pd
 import numpy as np
+import math
+
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.linear_model import LinearRegression
 
 ###############################################-DTYPE OPT_MEMORY USAGE OPT-###############################################
 
@@ -79,19 +84,211 @@ def optimize(df: pd.DataFrame, datetime_features: List[str] = []):
     optimize_floats(optimize_ints(optimize_objects(df, datetime_features)))
     print(f'Optimize_memory_func reduce memory usage by {(1-(sys.getsizeof(df)/mem_usage_bef))*100 :.2f} %.')
     
-###############################################-USER_SETTINGS_PREFERENCES-###############################################
+###############################################-OUTLIER-DETECTION-BOXPLOTS-###############################################
     
-def snake_case_col(df: pd.DataFrame) -> pd.DataFrame:
-    '''
-    Utils for personal preferences.
-    Change column names into snake case type.
-    '''
-    df.columns = df.columns.map(lambda x: inflection.underscore(x))
-    print(f'Columns name have changed sucessfully: {list(df.columns.values[:3])}...')
+def turkey_horizontal_boxplot(dataframe: pd.DataFrame, 
+                       x_feature: str, 
+                       y_feature:str = None):
+    """
+    Description: 
     
-###############################################-CUSTOM_VISUALIZATION-###############################################
+    This function creates a horizontal boxplot using Seaborn library. It takes in a pandas dataframe and one or two feature/column names as input, 
+    and generates a horizontal boxplot to visualize the distribution of data.
+    
+    Args:
 
-def density_plot_of_a_feature(dataframe, feature):
-  plt.figure(figsize=(8, 6))
-  sns.distplot(dataframe[feature])
-  plt.show()
+    dataframe (pandas dataframe): The input dataframe containing the data to be plotted.
+    x_feature (str): The name of the column in the dataframe to be plotted on the x-axis.
+    y_feature (Optional[str]): The name of the column in the dataframe to be plotted on the y-axis. If this parameter is not provided, only the x_feature will be plotted.
+    
+    Return:
+
+    sns.boxplot
+    
+    Dependencies:
+    
+    This function requires the pandas and numpy libraries to be installed.
+    """
+    
+    # Set the theme and style for the plot using Seaborn
+    sns.set_theme(rc={'figure.figsize': (10,6)},style='whitegrid',palette='Reds')
+    
+    # If y_feature is provided, plot a boxplot with both x_feature and y_feature
+    if y_feature != None:
+        ax = sns.boxplot(x=dataframe[x_feature], y=dataframe[y_feature])
+        ax.set_title(f'Boxplot \n x: {x_feature} -  y: {y_feature}') # Set the plot title to display feature names
+
+    # If y_feature is not provided, plot a boxplot with only x_feature
+    else:
+        ax = sns.boxplot(x=dataframe[x_feature], y=None)
+        ax.set_title(f'Boxplot \n x: {x_feature}')
+
+        
+def tukey_method_outliers(
+    dataframe: pd.DataFrame, 
+    column: str) -> tuple[float, float]:
+    
+    """
+    Description:
+    This function applies the Tukey's method to identify potential outliers in a column of a given dataframe.
+    The method calculates the upper and lower bounds for potential outliers based on the interquartile range (IQR)
+    of the distribution, as 1.5 times the IQR above and below the 75th and 25th percentiles, respectively.
+    
+    Args:
+    - dataframe: pandas.DataFrame object, the dataframe containing the column of interest
+    - column: str, the name of the column for which to identify outliers
+    
+    Return:
+    A tuple containing the upper and lower bounds for potential outliers.
+    
+    Dependencies:
+    This function requires the pandas and numpy libraries to be installed.
+    
+    """
+    percentile_25 = np.nanpercentile(dataframe[column], 25)
+    percentile_75 = np.nanpercentile(dataframe[column], 75)
+    iqr = (percentile_75 - percentile_25)
+    upper_outlier_bound = percentile_75 + 1.5*iqr
+    lower_outlier_bound = percentile_25 - 1.5*iqr
+
+    return (upper_outlier_bound, lower_outlier_bound)
+
+def tukey_method_outlier_count_and_percentage(
+    dataframe: pd.DataFrame, 
+    column: str) -> tuple[int, float]:
+    
+    """
+    Description:
+    This function uses the Tukey's method to identify potential outliers in a column of a given dataframe,
+    and calculates the count and percentage of potential outliers in the column.
+
+    Args:
+    - dataframe: pandas.DataFrame object, the dataframe containing the column of interest
+    - column: str, the name of the column for which to identify outliers
+
+    Return:
+    A tuple containing the count and percentage of potential outliers in the column.
+
+    Dependencies:
+    This function requires the pandas and numpy libraries to be installed.
+    """
+    upper_outlier_bound, lower_outlier_bound = tukey_method_outliers(dataframe, column)
+
+    count = 0
+    for value in dataframe[column]:
+        if value > upper_outlier_bound or value < lower_outlier_bound:
+            count += 1
+    percentage = round(count / dataframe.shape[0] * 100, 2)
+
+    return (count, percentage)
+    
+###############################################-OUTLIER-DETECTION-FUNCTION-###############################################
+
+def custom_outlier_catcher_2d_sales_customers_and_agg(
+    dataframe: pd.DataFrame,
+    feature: str,
+    threshold_max_coeff=0.9,
+    threshold_max: float = 99.998,
+    threshold_min: float = 99.9899,
+    show_outliers: bool = True,
+    remove_outliers: bool = False,
+    df_output: bool = False,
+) -> pd.DataFrame:
+    
+    """
+    Description:
+    
+    This function detects and visualizes outliers in a 2D sales and customers dataset. It calculates 
+    a threshold based on the correlation coefficient between the two features and a percentile value. 
+    It then detects outliers based on the residuals from a linear regression model fit on the dataset. 
+    It removes the outliers and plots the data points and regression line for each unique value of the 
+    feature column specified. 
+    
+    
+    Potential outliers are identified by a highlighted point, while the point farthest from the regression 
+    line is marked with a star.
+    
+    Args:
+    - dataframe: A pandas DataFrame object containing the 2D sales and customers dataset.
+    - feature: A string indicating the name of the column containing the unique values to group the data.
+    - threshold_max_coeff: A float indicating the maximum correlation coefficient threshold to use for 
+      calculating the outlier detection threshold. Defaults to 0.9.
+    - threshold_max: A float indicating the maximum percentile value to use for calculating the outlier 
+      detection threshold. Defaults to 99.998.
+    - threshold_min: A float indicating the minimum percentile value to use for calculating the outlier 
+      detection threshold. Defaults to 99.9899.
+    - show_outliers: A boolean indicating whether or not to show the outliers in the plot. Defaults to True.
+    - remove_outliers: A boolean indicating whether or not to remove the outliers from the dataset. Defaults to False.
+    - df_output: A boolean indicating whether or not to return a copy of the DataFrame without the outliers. 
+      Defaults to False.
+    
+    Return:
+    - A pandas DataFrame object (copy of initial df) with the outliers removed. Only returned if df_output is set to True.
+    
+    Dependencies:
+    - pandas, numpy, math, matplotlib, seaborn
+    """
+    
+    unique_values = sorted(dataframe[feature].unique().tolist())
+
+    columns_num = 2
+    rows_num = math.ceil(len(unique_values) / columns_num)
+    df_no_outliers = dataframe.copy()
+
+    fig, axes = plt.subplots(rows_num, columns_num, figsize=(10 * columns_num, 8 * rows_num))
+
+    row = -1
+    column = columns_num - 1
+
+    for unique_value in unique_values:
+        if column == (columns_num - 1):
+            row += 1
+            column = 0
+        else:
+            column += 1
+        temp_df = df_no_outliers[df_no_outliers[feature] == unique_value]
+
+        # Outlier detection
+        x = temp_df['Customers'].values
+        y = temp_df['Sales'].values
+        
+        model = LinearRegression().fit(x.reshape(-1, 1), y)
+        residuals = y - model.predict(x.reshape(-1, 1))
+        max_residual_idx = np.argmax(np.abs(residuals))
+        max_residual = residuals[max_residual_idx]
+
+        # Threshold calculation
+        corr_coef = temp_df['Customers'].corr(temp_df['Sales'])
+
+        if corr_coef > threshold_max_coeff:
+            threshold = np.percentile(np.abs(residuals), threshold_max)
+        else:
+            threshold = np.percentile(np.abs(residuals), threshold_min)
+
+        outliers = np.where(np.abs(residuals) > threshold)[0]
+
+        # Remove outliers from df_no_outliers
+        if remove_outliers:
+            df_no_outliers = df_no_outliers.drop(temp_df.index[outliers])
+
+        # Plot data and regression line
+        sns.scatterplot(ax=axes[row, column], x='Customers', y='Sales', color='lightcoral', alpha=0.7, data=temp_df)
+        lin_fit = np.polyfit(temp_df['Customers'], temp_df['Sales'], 1)
+        lin_func = np.poly1d(lin_fit)(temp_df['Customers'])
+        axes[row, column].plot(temp_df['Customers'], lin_func, "k--", lw=1)
+
+        if show_outliers:
+            axes[row, column].scatter(x[max_residual_idx], y[max_residual_idx], color='red', marker='*', s=200)
+            axes[row, column].scatter(x[outliers], y[outliers], color='indianred', marker='o', s=100)
+
+        axes[row, column].set_title(f"Sales vs Customers for {feature} - {unique_value}\nCorrelation = {round(temp_df['Customers'].corr(temp_df['Sales']) * 100, 2)}%")
+
+    # Remove any excess axes
+    if len(unique_values) % columns_num != 0:
+        for column_num in range(column + 1, columns_num):
+            fig.delaxes(axes[rows_num - 1][column_num])
+
+    if df_output:
+        print(f'The identified outliers have been successfully removed, resulting in a reduction of {dataframe.shape[0] - df_no_outliers.shape[0]} data points in the initial DataFrame.')
+        
+        return df_no_outliers
