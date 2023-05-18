@@ -6,6 +6,7 @@ import inflection
 import pandas as pd
 import numpy as np
 import math
+import statsmodels.api as sm
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -292,3 +293,139 @@ def custom_outlier_catcher_2d_sales_customers_and_agg(
         print(f'The identified outliers have been successfully removed, resulting in a reduction of {dataframe.shape[0] - df_no_outliers.shape[0]} data points in the initial DataFrame.')
         
         return df_no_outliers
+    
+    
+###############################################-SEASONAL_DECOMPOSE-FUNCTION-###############################################
+
+def custom_seasonal_decompose(
+    df: pd.DataFrame,
+    title: str = 'Decomposition of ...',
+    col_date: str = 'Date', 
+    color: str = 'firebrick'
+) -> None:
+    
+    """
+    Perform seasonal decomposition of a time series and display the components.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame containing the time series data.
+        col_date (str, optional): Name of the date column in the DataFrame. Defaults to 'Date'.
+        color (str, optional): Color for the plots. Defaults to 'firebrick'.
+
+    Returns:
+        None (display the seasonal_decompose.plot())
+
+    """
+
+    # Convert the date column to datetime format
+    df[col_date] = pd.to_datetime(df[col_date])
+
+    # Set the date column as the DataFrame index
+    df = df.set_index(col_date)
+
+    # Aggregate data to daily level (e.g., calculate mean)
+    df_daily = df['Sales'].resample('D').mean().dropna()
+
+    # Perform seasonal decomposition of the time series
+    decomposition = sm.tsa.seasonal_decompose(df_daily, model='additive', period=7)
+
+    # Display the plots
+    fig, axes = plt.subplots(4, 1, figsize=(18, 12))
+
+    # Plot the Observed component
+    axes[0].plot(df_daily, color=color)
+    axes[0].set_ylabel('Observed')
+
+    # Plot the Trend component
+    axes[1].plot(decomposition.trend, color=color)
+    axes[1].set_ylabel('Trend')
+
+    # Plot the Seasonal component
+    axes[2].plot(decomposition.seasonal, color=color)
+    axes[2].set_ylabel('Seasonal')
+
+    # Plot the Residual component
+    axes[3].scatter(decomposition.resid.index, decomposition.resid, color=color, marker='.')
+    axes[3].axhline(y=0, color='black', linestyle='-')
+    axes[3].set_ylabel('Residual')
+
+    # Set the title for the entire plot
+    fig.suptitle(title)
+
+    # Display the plot
+    plt.show()
+
+
+def custom_plot_acf(
+    df: pd.DataFrame, 
+    column: str,
+    date_col: str = 'Date',
+    color: str = 'firebrick', lags: int = 30
+) -> None:
+    """
+    Plot the autocorrelation function (ACF) for a given column in a DataFrame.
+
+    Parameters:
+        - df (DataFrame): The input DataFrame.
+        - column (str): The name of the column to analyze.
+        - date_col (str): The name of the column containing the dates. Default is 'Date'.
+        - color (str): The color of the ACF plot. Default is 'firebrick'.
+        - lags (int): The number of lags to display in the ACF plot. Default is 30.
+
+    Returns:
+        None (displays the ACF plot).
+    """
+
+    # Resample the column to daily frequency and calculate the mean
+    df = df.set_index('Date')
+    df_daily = df[column].resample('D').mean().dropna()
+
+    # Configure plot settings
+    plt.rc("figure", autolayout=True, figsize=(11, 3))
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=[color])
+
+    # Plot the ACF
+    plot_acf(df_daily, lags=lags)
+
+    # Show the plot
+    plt.show()
+    
+
+def custom_plot_pacf(
+    df: pd.DataFrame, 
+    column: str,
+    date_col: str = 'Date',
+    color: str = 'firebrick',
+    lags: int = 30
+) -> None:
+    """
+    Plot the partial autocorrelation function (PACF) for a given column in a DataFrame.
+
+    Parameters:
+        - df (pd.DataFrame): The input DataFrame.
+        - column (str): The name of the column to analyze.
+        - date_col (str): The name of the column containing the dates. Default is 'Date'.
+        - color (str): The color of the PACF plot. Default is 'firebrick'.
+        - lags (int): The number of lags to display in the PACF plot. Default is 30.
+
+    Returns:
+        None (displays the PACF plot).
+    """
+
+    # Set the date column as the index
+    df = df.set_index(date_col)
+
+    # Resample the column to daily frequency and calculate the mean
+    df_daily = df[column].resample('D').mean().dropna()
+
+    # Configure plot settings
+    plt.rc("figure", autolayout=True, figsize=(11, 3))
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=[color])
+
+    # Plot the PACF
+    plot_pacf(df_daily, lags=lags)
+
+    # Show the plot
+    plt.show()
+
+    
