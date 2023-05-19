@@ -6,7 +6,9 @@ import inflection
 import pandas as pd
 import numpy as np
 import math
+
 import statsmodels.api as sm
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -299,6 +301,7 @@ def custom_outlier_catcher_2d_sales_customers_and_agg(
 
 def custom_seasonal_decompose(
     df: pd.DataFrame,
+    column: str = 'Sales',
     title: str = 'Decomposition of ...',
     col_date: str = 'Date', 
     color: str = 'firebrick'
@@ -309,6 +312,7 @@ def custom_seasonal_decompose(
 
     Args:
         df (pd.DataFrame): Input DataFrame containing the time series data.
+        column (str, optional): The name of the column to analyze.
         col_date (str, optional): Name of the date column in the DataFrame. Defaults to 'Date'.
         color (str, optional): Color for the plots. Defaults to 'firebrick'.
 
@@ -324,7 +328,7 @@ def custom_seasonal_decompose(
     df = df.set_index(col_date)
 
     # Aggregate data to daily level (e.g., calculate mean)
-    df_daily = df['Sales'].resample('D').mean().dropna()
+    df_daily = df[column].resample('D').mean().dropna()
 
     # Perform seasonal decomposition of the time series
     decomposition = sm.tsa.seasonal_decompose(df_daily, model='additive', period=7)
@@ -429,3 +433,38 @@ def custom_plot_pacf(
     plt.show()
 
     
+def rolling_mean_analysis(
+    df: pd.DataFrame, 
+    window_sizes: list = [7, 30, 365], 
+    date_column: str = 'Date', 
+    column: str = 'Sales'
+)-> None:
+    """
+    Analyze the stationarity of a time series by plotting rolling statistics.
+
+    Parameters:
+        - df (pd.DataFrame): The input DataFrame.
+        - window_sizes (list): A list of window sizes for calculating rolling statistics.
+        - date_column (str): The name of the date column. Default is 'Date'.
+        - column (str): The name of the column to analyze. Default is 'Sales'.
+
+    Returns:
+        None (displays the plot).
+    """
+    df = df.set_index(date_column)
+    df_daily = df[column].resample('D').mean().dropna()
+
+    fig, ax = plt.subplots(len(window_sizes), 1, figsize=(16, 10))
+
+    for i, window in enumerate(window_sizes):
+        rolling_mean = df_daily.rolling(window=window, center=True, min_periods=math.ceil(window/2)).mean()
+        rolling_std = df_daily.rolling(window=window, center=True, min_periods=math.ceil(window/2)).std()
+
+        ax[i].plot(df_daily, label='Original', color='firebrick', alpha=0.5)
+        ax[i].plot(rolling_mean, label='Moving Average', color='firebrick', alpha=1)
+        ax[i].plot(rolling_std, label='Moving Std', color='dimgray', alpha=0.7)
+        ax[i].set_title(f'{window}-Day Window')
+        ax[i].legend()
+
+    plt.tight_layout()
+    plt.show()
