@@ -9,6 +9,7 @@ import math
 
 import statsmodels.api as sm
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.stattools import adfuller, kpss
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -468,3 +469,125 @@ def rolling_mean_analysis(
 
     plt.tight_layout()
     plt.show()
+    
+###############################################-STATIONARITY-TEST-UNIT-ROOT-FUNCTION-###############################################
+    
+def custom_test_stationarity(
+    df: pd.DataFrame, 
+    col_date: str = 'Date', 
+    column: str = 'Sales', 
+    resample: str ='D', 
+    full_results: bool =True,
+    make_diff: bool = False,
+    no_diff: int = 1
+):
+    
+    """
+    Description:
+    
+    Perform stationarity tests on a time series using the Augmented Dickey-Fuller (ADF) and Kwiatkowski-Phillips-Schmidt-Shin (KPSS) tests.
+    
+    To ensure the stationarity of the series, it is recommended to apply both tests.
+    
+    Possible outcomes of applying these stationary tests are as follows:
+
+    Case 1: Both tests conclude that the series is not stationary - The series is not stationary
+    Case 2: Both tests conclude that the series is stationary - The series is stationary
+    Case 3: KPSS indicates stationarity and ADF indicates non-stationarity - The series is trend stationary. 
+            Trend needs to be removed to make series strict stationary. The detrended series is checked for stationarity.
+    Case 4: KPSS indicates non-stationarity and ADF indicates stationarity - The series is difference stationary. 
+            Differencing is to be used to make series stationary. The differenced series is checked for stationarity.
+
+     Parameters:
+        - df (pd.DataFrame): DataFrame containing the time series.
+        - col_date (str): Name of the column containing dates (time series index).
+        - column (str): Name of the column containing the time series values.
+        - resample (str): Time unit to resample the time series to (default is 'D' for day).
+        - full_results (bool): Specifies whether to display full test results (default is True).
+        - make_diff (bool): Indicates whether to difference the time series (default is False).
+        - no_diff (int): Number of times to difference the time series (default is 1).
+    
+    Based on:
+    - https://www.statsmodels.org/devel/examples/notebooks/generated/stationarity_detrending_adf_kpss.html
+
+    Returns:
+    None - Displays the results of the stationarity tests.
+    """
+    
+    # Set the DataFrame index to the specified column
+    df = df.set_index(col_date)
+    
+    # Resample the time series to the specified frequency
+    df_daily = df[column].resample(resample).mean().dropna()
+    
+    # Apply differencing if make_diff is True
+    if make_diff:
+        df_daily = df_daily.diff(no_diff).dropna()
+    
+    # ADF test
+    adf_result = adfuller(df_daily, autolag="AIC")
+    adf_p_val = adf_result[1]
+    adf_output = pd.Series(adf_result[0:4], index=[
+        "Test Statistic",
+        "p-value",
+        "#Lags Used",
+        "Number of Observations Used"
+    ])
+    for key, value in adf_result[4].items():
+        adf_output["Critical Value (%s)" % key] = value
+    
+    # KPSS test
+    kpss_result = kpss(df_daily, regression="c", nlags="auto")
+    kpss_p_val = kpss_result[1]
+    kpss_output = pd.Series(kpss_result[0:3], index=[
+        "Test Statistic",
+        "p-value",
+        "Lags Used"
+    ])
+    for key, value in kpss_result[3].items():
+        kpss_output["Critical Value (%s)" % key] = value
+    
+    # Print the results
+    print("Results of Stationarity Tests: \n")
+    
+    if full_results:
+        print("- ADF Test:")
+        print(adf_output,"\n")
+        print("- KPSS Test:")
+        print(kpss_output,'\n')
+    else:
+        print("ADF p-value:  {:.10f}".format(adf_output["p-value"]))
+        print("KPSS p-value: {:.10f}".format(kpss_output["p-value"]),'\n')
+   
+    cases = {
+        (True, False): "Case 2: Both tests conclude that the series is stationary - The series is stationary",
+        (False, True): "Case 1: Both tests conclude that the series is not stationary - The series is not stationary",
+        (False, False): "Case 3: KPSS indicates stationarity and ADF indicates non-stationarity - The series is trend stationary. Trend needs to be removed to make series strict stationary. The detrended series is checked for stationarity.",
+        (True, True): "Case 4: KPSS indicates non-stationarity and ADF indicates stationarity - The series is difference stationary. Differencing is to be used to make series stationary. The differenced series is checked for stationarity."
+    }
+
+    print(cases[(adf_p_val <= 0.05, kpss_p_val <= 0.05)])
+    
+###############################################-CORR-HEATMAP-###############################################
+    
+def plot_correlation_heatmap(
+    df:pd.DataFrame
+) -> None:
+    
+    """
+    Description:
+    
+    The plot_correlation_heatmap function takes a pandas DataFrame df as input and generates a heatmap to visualize the correlation matrix of the features in the DataFrame.
+    
+    Parameters:
+    - df (pandas DataFrame): The input DataFrame containing the features.
+    
+    Return:
+    - this function does not return any values. It generates a correlation heatmap plot.
+    
+    """
+    
+    upper_triangle = np.zeros_like(df.corr(), dtype = np.bool)
+    upper_triangle[np.triu_indices_from(upper_triangle)] = True
+    f, ax = plt.subplots(figsize = (15, 10))
+    sns.heatmap(df.corr(),ax=ax,mask=upper_triangle,annot=True, fmt='.2f',linewidths=0.5,cmap='Reds');
