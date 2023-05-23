@@ -10,6 +10,7 @@ import math
 import statsmodels.api as sm
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller, kpss
+from scipy.signal import periodogram
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -304,8 +305,10 @@ def custom_seasonal_decompose(
     df: pd.DataFrame,
     column: str = 'Sales',
     title: str = 'Decomposition of ...',
+    resample: str ='D',
     col_date: str = 'Date', 
-    color: str = 'firebrick'
+    color: str = 'firebrick',
+    set_date_index: bool = True
 ) -> None:
     
     """
@@ -321,15 +324,17 @@ def custom_seasonal_decompose(
         None (display the seasonal_decompose.plot())
 
     """
+    
+    if set_date_index:
 
-    # Convert the date column to datetime format
-    df[col_date] = pd.to_datetime(df[col_date])
+        # Convert the date column to datetime format
+        df[col_date] = pd.to_datetime(df[col_date])
 
-    # Set the date column as the DataFrame index
-    df = df.set_index(col_date)
+        # Set the date column as the DataFrame index
+        df = df.set_index(col_date)
 
     # Aggregate data to daily level (e.g., calculate mean)
-    df_daily = df[column].resample('D').mean().dropna()
+    df_daily = df[column].resample(resample).mean().dropna()
 
     # Perform seasonal decomposition of the time series
     decomposition = sm.tsa.seasonal_decompose(df_daily, model='additive', period=7)
@@ -365,8 +370,11 @@ def custom_plot_acf(
     df: pd.DataFrame, 
     column: str,
     date_col: str = 'Date',
-    color: str = 'firebrick', lags: int = 30
+    color: str = 'firebrick', lags: int = 30,
+    set_date_index: bool = True,
+    resample_df: bool = True
 ) -> None:
+    
     """
     Plot the autocorrelation function (ACF) for a given column in a DataFrame.
 
@@ -381,9 +389,17 @@ def custom_plot_acf(
         None (displays the ACF plot).
     """
 
+    if set_date_index:
+            
+    # Set the date column as the index
+        df = df.set_index('Date')
+        
+    if resample_df:
+        
     # Resample the column to daily frequency and calculate the mean
-    df = df.set_index('Date')
-    df_daily = df[column].resample('D').mean().dropna()
+        df_daily = df[column].resample('D').mean().dropna()
+    else:
+        df_daily = df
 
     # Configure plot settings
     plt.rc("figure", autolayout=True, figsize=(11, 3))
@@ -391,6 +407,7 @@ def custom_plot_acf(
 
     # Plot the ACF
     plot_acf(df_daily, lags=lags)
+    plt.xticks(np.arange(1,lags+1,1))
 
     # Show the plot
     plt.show()
@@ -401,7 +418,10 @@ def custom_plot_pacf(
     column: str,
     date_col: str = 'Date',
     color: str = 'firebrick',
-    lags: int = 30
+    lags: int = 30,
+    set_date_index: bool = True,
+    resample_df: bool = True
+    
 ) -> None:
     """
     Plot the partial autocorrelation function (PACF) for a given column in a DataFrame.
@@ -417,11 +437,16 @@ def custom_plot_pacf(
         None (displays the PACF plot).
     """
 
+    if set_date_index:
+        
     # Set the date column as the index
-    df = df.set_index(date_col)
+        df = df.set_index(date_col)
 
+    if resample_df:
     # Resample the column to daily frequency and calculate the mean
-    df_daily = df[column].resample('D').mean().dropna()
+        df_daily = df[column].resample('D').mean().dropna()
+    else:
+        df_daily = df
 
     # Configure plot settings
     plt.rc("figure", autolayout=True, figsize=(11, 3))
@@ -429,6 +454,7 @@ def custom_plot_pacf(
 
     # Plot the PACF
     plot_pacf(df_daily, lags=lags)
+    plt.xticks(np.arange(1,lags+1,1))
 
     # Show the plot
     plt.show()
@@ -438,7 +464,10 @@ def rolling_mean_analysis(
     df: pd.DataFrame, 
     window_sizes: list = [7, 30, 365], 
     date_column: str = 'Date', 
-    column: str = 'Sales'
+    column: str = 'Sales',
+    set_date_index: bool = True,
+    resample_df: bool = True
+    
 )-> None:
     """
     Analyze the stationarity of a time series by plotting rolling statistics.
@@ -452,9 +481,18 @@ def rolling_mean_analysis(
     Returns:
         None (displays the plot).
     """
-    df = df.set_index(date_column)
-    df_daily = df[column].resample('D').mean().dropna()
-
+    
+    if set_date_index:
+        
+    # Set the date column as the index
+        df = df.set_index(date_column)
+        
+    if resample_df:
+    # Resample the column to daily frequency and calculate the mean
+        df_daily = df[column].resample('D').mean().dropna()
+    else:
+        df_daily = df
+        
     fig, ax = plt.subplots(len(window_sizes), 1, figsize=(16, 10))
 
     for i, window in enumerate(window_sizes):
@@ -479,7 +517,9 @@ def custom_test_stationarity(
     resample: str ='D', 
     full_results: bool =True,
     make_diff: bool = False,
-    no_diff: int = 1
+    num_diff: int = 1,
+    set_date_index: bool = True,
+    return_diffed_df = False
 ):
     
     """
@@ -514,15 +554,17 @@ def custom_test_stationarity(
     None - Displays the results of the stationarity tests.
     """
     
+    if set_date_index:
+        
     # Set the DataFrame index to the specified column
-    df = df.set_index(col_date)
+        df = df.set_index(col_date)
     
     # Resample the time series to the specified frequency
     df_daily = df[column].resample(resample).mean().dropna()
     
     # Apply differencing if make_diff is True
     if make_diff:
-        df_daily = df_daily.diff(no_diff).dropna()
+        df_daily = df_daily.diff(num_diff).dropna()
     
     # ADF test
     adf_result = adfuller(df_daily, autolag="AIC")
@@ -568,6 +610,11 @@ def custom_test_stationarity(
 
     print(cases[(adf_p_val <= 0.05, kpss_p_val <= 0.05)])
     
+    if return_diffed_df:
+        return df_daily
+    else:
+        pass
+    
 ###############################################-CORR-HEATMAP-###############################################
     
 def plot_correlation_heatmap(
@@ -591,3 +638,66 @@ def plot_correlation_heatmap(
     upper_triangle[np.triu_indices_from(upper_triangle)] = True
     f, ax = plt.subplots(figsize = (15, 10))
     sns.heatmap(df.corr(),ax=ax,mask=upper_triangle,annot=True, fmt='.2f',linewidths=0.5,cmap='Reds');
+    
+###############################################-NEW-###############################################
+
+def custom_plot_periodogram(
+    df: pd.DataFrame, 
+    detrend: str = 'linear', 
+    ax = None, 
+    set_date_index: bool = False, 
+    resample_df: bool = False,
+    fig_size: tuple = (15,8)
+):
+    
+    """
+    Description:
+    
+    Generate a periodogram plot to visualize the frequency components of a time series.
+
+    Args:
+        df (pd.DataFrame): The input time series data.
+        detrend (str, optional): The detrend method to apply. Defaults to 'linear'.
+        ax (Axes, optional): The target axes to plot the periodogram. If None, a new figure and axes will be created. Defaults to None.
+        set_date_index (bool, optional): Flag indicating whether to set the date column as the index. Defaults to False.
+        resample_df (bool, optional): Flag indicating whether to resample the data to daily frequency. Defaults to False.
+
+    Returns:
+        Axes: The plotted periodogram.
+
+    """
+    
+    if set_date_index:
+        # Set the date column as the index
+        df = df.set_index('Date')
+    
+    if resample_df:
+        # Resample the column to daily frequency and calculate the mean
+        df_daily = df.resample('D').mean().dropna()
+    else:
+        df_daily = df
+    
+    fs = pd.Timedelta("1Y") / pd.Timedelta("1D")
+    frequencies, spectrum = periodogram(df_daily, fs=fs, detrend=detrend, window="boxcar", scaling='spectrum')
+    
+    if ax is None:
+        _, ax = plt.subplots(figsize=fig_size)
+    
+    ax.step(frequencies, spectrum, color="firebrick")
+    ax.set_xscale("log")
+    ax.set_xticks([1, 2, 4, 6, 12, 26, 52, 104])
+    ax.set_xticklabels([
+        "Annual (1)",
+        "Semiannual (2)",
+        "Quarterly (4)",
+        "Bimonthly (6)",
+        "Monthly (12)",
+        "Biweekly (26)",
+        "Weekly (52)",
+        "Semiweekly (104)"
+    ], rotation=30)
+    ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+    ax.set_ylabel("Variance")
+    ax.set_title("Periodogram")
+    
+    return ax
