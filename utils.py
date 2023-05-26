@@ -701,3 +701,4 @@ def custom_plot_periodogram(
     ax.set_title("Periodogram")
     
     return ax
+
